@@ -1,0 +1,98 @@
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Thông tin leader và thành viên
+local partyLeaderName = "pandaboiis54"
+local partyMembers = { "ChaneyKittis5", "WrightPrestonu8" }
+
+-- PlaceId & JobId mục tiêu
+local PLACE_ID_TARGET = 4310463616
+local JOB_ID_TARGET   = "d0c94fec-817b-4cad-a39b-a73296bc1b87"
+
+-- Thư mục Parties
+local Parties = ReplicatedStorage:FindFirstChild("Parties")
+if not Parties then return end
+
+-- Hàm kiểm tra đã đủ leader + toàn bộ members
+local function isPartyComplete(leader, members)
+    for _, party in ipairs(Parties:GetChildren()) do
+        local mf = party:FindFirstChild("Members")
+        if mf and mf:IsA("Folder") then
+            local hasLeader = mf:FindFirstChild(leader)
+            local allIn = true
+            for _, mem in ipairs(members) do
+                if not mf:FindFirstChild(mem) then
+                    allIn = false
+                    break
+                end
+            end
+            if hasLeader and allIn then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Chỉ chạy cho Leader
+if LocalPlayer.Name ~= partyLeaderName then
+    print("Bạn không phải leader. Script dừng.")
+    return
+end
+
+while true do
+    task.wait(5)
+
+    local complete = isPartyComplete(partyLeaderName, partyMembers)
+
+    -- 1) Nếu Party CHƯA đủ, mới làm Teleport + Mời
+    if not complete then
+        -- Nếu không ở PLACE_ID_TARGET => Teleport
+        if game.PlaceId ~= PLACE_ID_TARGET then
+            TeleportService:Teleport(PLACE_ID_TARGET, LocalPlayer)
+            continue
+        end
+        -- Nếu đã ở PLACE_ID_TARGET nhưng chưa đúng JOB_ID_TARGET => TeleportToPlaceInstance
+        if game.JobId ~= JOB_ID_TARGET then
+            TeleportService:TeleportToPlaceInstance(PLACE_ID_TARGET, JOB_ID_TARGET, LocalPlayer)
+            continue
+        end
+
+        -- Ở đúng place + job => gửi lời mời
+        local inviteEvent = ReplicatedStorage:WaitForChild("Shared")
+            :WaitForChild("Party")
+            :WaitForChild("Invite")
+
+        for _, memberName in ipairs(partyMembers) do
+            local memPlayer = Players:FindFirstChild(memberName)
+            if memPlayer then
+                inviteEvent:FireServer(memPlayer)
+                task.wait(0.5)
+            end
+        end
+        print("Đã gửi lời mời. Đang chờ party đầy đủ...")
+
+    else
+        -- 2) Nếu Party ĐÃ đủ
+        print("Party đã đủ thành viên.")
+        
+        -- Chỉ gọi StartRaid nếu đang ở đúng PLACE_ID_TARGET + JOB_ID_TARGET
+        if game.PlaceId == PLACE_ID_TARGET and game.JobId == JOB_ID_TARGET then
+            print("Leader đang ở đúng place và job, bắt đầu StartRaid...")
+            local raidArgs = { [1] = 39 }
+            ReplicatedStorage:WaitForChild("Shared")
+                :WaitForChild("Teleport")
+                :WaitForChild("StartRaid")
+                :FireServer(unpack(raidArgs))
+            -- Thoát vòng lặp để không lặp lại StartRaid
+            break
+        else
+            print("Party đủ nhưng Leader không ở đúng place/job => Không Teleport vì đã đủ party.")
+            -- Tuỳ ý: break hoặc tiếp tục chờ nếu bạn muốn 
+            break
+        end
+    end
+end
